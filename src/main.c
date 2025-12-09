@@ -1,5 +1,4 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/logging/log.h>
@@ -24,6 +23,12 @@ static ssize_t read(struct bt_conn *conn,
 					const struct bt_gatt_attr *attr,
 					void *buf, uint16_t len, uint16_t offset);
 
+// Forward declaration
+static void adv_work_handler(struct k_work *work);
+
+// Work item to restart advertising
+K_WORK_DEFINE(adv_work, adv_work_handler);
+
 static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value);
 
 static uint32_t current_value = 0;
@@ -46,6 +51,21 @@ static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
 	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
 };
+
+static void adv_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+
+	int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), NULL, 0);
+	if (err)
+	{
+		LOG_ERR("Advertising failed to start (err %d)\n", err);
+	}
+	else
+	{
+		LOG_INF("Advertising restarted");
+	}
+}
 
 /* Read callback: return current value */
 static ssize_t read(struct bt_conn *conn,
@@ -75,23 +95,41 @@ void notify_value(uint32_t value)
 	}
 }
 
+static void connected(struct bt_conn *conn, uint8_t err)
+{
+	LOG_INF("Connected");
+}
+
+static void disconnected(struct bt_conn *conn, uint8_t reason)
+{
+	LOG_WRN("Disconnected (reason 0x%02x)", reason);
+	k_work_submit(&adv_work);
+}
+
+BT_CONN_CB_DEFINE(conn_callbacks) = {
+	.connected = connected,
+	.disconnected = disconnected,
+};
+
 int main(void)
 {
 	const struct device *const nau7802 = DEVICE_DT_GET_ONE(nuvoton_nau7802);
 	struct sensor_value sample;
-	int err;
 
+	int err;
 	if (!device_is_ready(nau7802))
 	{
 		LOG_ERR("sensor: device not ready.");
 		return -1;
 	}
+
 	err = bt_enable(NULL);
 	if (err)
 	{
 		LOG_ERR("Bluetooth init failed (err %d)\n", err);
 		return -1;
 	}
+
 	err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), NULL, 0);
 	if (err)
 	{
