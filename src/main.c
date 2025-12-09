@@ -52,9 +52,9 @@ static ssize_t read(struct bt_conn *conn,
 					const struct bt_gatt_attr *attr,
 					void *buf, uint16_t len, uint16_t offset)
 {
-	const uint8_t *value = attr->user_data;
 	return bt_gatt_attr_read(conn, attr, buf, len, offset,
-							 value, sizeof(*value));
+							 attr->user_data,
+							 sizeof(current_value));
 }
 
 static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
@@ -66,7 +66,7 @@ static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
 
 void notify_value(uint32_t value)
 {
-	int err = bt_gatt_notify(NULL, &custom_svc.attrs[1],
+	int err = bt_gatt_notify(NULL, &custom_svc.attrs[2],
 							 &value,
 							 sizeof(value));
 	if (err)
@@ -111,10 +111,10 @@ int main(void)
 		}
 		else
 		{
-			current_value = sample.val1;
+			current_value = sample.val1 < 0 ? -sample.val1 : sample.val1;
 			notify_value(current_value);
 
-			LOG_INF("Force: %d N", sample.val1);
+			LOG_INF("Force: %d N", current_value);
 		}
 		k_sleep(K_MSEC(1000));
 	}
