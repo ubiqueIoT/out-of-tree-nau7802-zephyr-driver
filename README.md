@@ -10,7 +10,10 @@ First, activate virtual environment:
 source ~/zephyrproject/.venv/bin/activate
 ```
 
-⚠️ Make sure to run `west blobs fetch hal_espressif`
+⚠️ Make sure to fetch the espressif blobs:
+```
+west blobs fetch hal_espressif
+```
 
 Then, build:
 ```
